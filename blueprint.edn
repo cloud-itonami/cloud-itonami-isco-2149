@@ -1,0 +1,11 @@
+[{:itonami.blueprint/social-impact [:engineering-analysis :technical-support :professional-design-review :safety-assessment]
+  :itonami.blueprint/domain :engineering/general
+  :itonami.blueprint/required-technologies [:identity :forms :dmn :bpmn :audit-ledger]
+  :itonami.blueprint/isco-08 "2149"
+  :itonami.blueprint/name "Engineering Professionals Not Elsewhere Classified"
+  :itonami.blueprint/governor :geneng-governor
+  :itonami.blueprint/robotics false
+  :db/id -1
+  :itonami.blueprint/status :public-oss
+  :itonami.blueprint/id "cloud-itonami-isco-2149"
+  :itonami.blueprint/license "AGPL-3.0-or-later"}]
