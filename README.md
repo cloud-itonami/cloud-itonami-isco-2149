@@ -35,7 +35,7 @@ All `:effect :propose` (never direct writes):
 ## Testing
 
 ```bash
-clj -M:test
+kbb -M:test
 ```
 
 ## License
