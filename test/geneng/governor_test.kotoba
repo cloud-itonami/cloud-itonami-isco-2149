@@ -1,7 +1,8 @@
 (ns geneng.governor-test
   (:require [clojure.test :refer [deftest is testing]]
             [geneng.governor :as governor]
-            [geneng.store :as store]))
+            [geneng.store :as store]
+            [geneng.operations :as operations]))
 
 (deftest test-check-unregistered-project
   (testing "check hard-blocks unregistered projects"
@@ -89,3 +90,53 @@
       (is (:ok? verdict))
       (is (not (:hard? verdict)))
       (is (not (:escalate? verdict))))))
+
+(defn- registered-store []
+  (store/mem-store {:projects {"proj-1" {:project-id "proj-1"}}}))
+
+(deftest hard-on-op-outside-the-catalog
+  ;; A registered project, :propose effect, high confidence: every rule the
+  ;; governor had before geneng.operations is satisfied, and this verdict was
+  ;; {:ok? true}.
+  (let [v (governor/check {:project-id "proj-1"} {}
+                          {:op :approve-design-change :effect :propose :confidence 0.9 :stake :low}
+                          (registered-store))]
+    (is (:hard? v))
+    (is (not (:ok? v)))
+    (is (not (:escalate? v)))
+    (is (= [:unknown-op] (mapv :rule (:violations v))))))
+
+(deftest hard-on-unreadable-llm-reply
+  ;; advisor/parse-proposal's fallback. Escalating it would ask a human to
+  ;; approve a record whose :op is :unknown.
+  (let [v (governor/check {:project-id "proj-1"} {}
+                          {:op :unknown :effect :propose :confidence 0.0 :stake :high
+                           :rationale "LLM response parse failure"}
+                          (registered-store))]
+    (is (:hard? v))
+    (is (not (:escalate? v)))
+    (is (some #(= :unknown-op (:rule %)) (:violations v)))))
+
+(deftest every-permitted-op-passes-the-hard-rules
+  ;; The catalog and the governor must agree: an op the catalog permits is
+  ;; never hard-blocked for being unknown.
+  (let [st (registered-store)]
+    (doseq [op (keys operations/permitted)]
+      (let [v (governor/check {:project-id "proj-1"} {}
+                              {:op op :effect :propose :confidence 0.9 :stake :low} st)]
+        (is (not (:hard? v)) (str op " was hard-blocked"))))))
+
+(deftest forbidden-ops-are-not-reported-as-unknown
+  ;; The sign-off ops are refused for the reason they exist, not as typos.
+  (let [st (registered-store)]
+    (doseq [op operations/forbidden]
+      (let [v (governor/check {:project-id "proj-1"} {}
+                              {:op op :effect :propose :confidence 0.9 :stake :high} st)]
+        (is (= [:no-certification] (mapv :rule (:violations v))) (str op))))))
+
+(deftest catalog-is-the-advisors-documented-vocabulary
+  ;; geneng.advisor's docstring names these four ops. An op dropped from the
+  ;; catalog would otherwise just start holding, and nothing above fails.
+  (is (= #{:draft-engineering-analysis :log-project-data
+           :flag-safety-risk :request-client-review}
+         (set (keys operations/permitted)))))
